@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<!-- pear.no 风格展示站起步模板：全页影片舞台架构。
+     影片是 fixed 底层舞台贯穿整页；每个 section 用数据属性声明自己的影片角色：
+       data-seg="s1"      本区滚动进度映射到「第 s1 段帧序列」 0..(帧数-1)
+       data-video="hero"  本区舞台切回 hero 活画循环 mp4（或 "footer"）
+       （皆无）           影片定格在上一区间末帧
+     帧序列按 skill 的目录规范取 <segment>/<tier>/f_001.webp，档位按 820px 切换 ——
+     与 SKILL.md「目录分工」、film-language.md 的双档约定一致。
+     替换文案、配色、段名与 assets/ 占位资产即可。规范见 ../references/。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>品牌名 — 一句话主张</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4efe6;
+    --ink: #1a1512;
+    --accent: #7a8c3f;   /* 梨绿，按品牌替换 */
+    --serif: "Playfair Display", Georgia, serif;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--ink); color: var(--paper);
+    font-family: var(--sans); font-weight: 300; line-height: 1.6;
+    overflow-x: hidden;
+  }
+  /* 纸纹噪点 */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99; opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ═══ 固定舞台：影片永远在场 ═══ */
+  #stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--ink); }
+  #stage video, #stage canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    filter: saturate(.8) sepia(.1);
+  }
+  #stage video { opacity: 0; transition: opacity .12s linear; }
+  #stage video.active { opacity: 1; }
+  #filmCanvas { opacity: 0; }
+  /* 半调网点 + 调光层 */
+  #stage .halftone {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle, rgba(26,21,18,.5) 1px, transparent 1.6px);
+    background-size: 5px 5px; mix-blend-mode: multiply; opacity: .3;
+  }
+  #dim { position: absolute; inset: 0; background: #0d0a06; opacity: .35; pointer-events: none; }
+  /* 幕次指示牌 */
+  #actUI {
+    position: fixed; left: 6vw; bottom: 6vh; z-index: 3; pointer-events: none;
+    color: var(--paper); mix-blend-mode: difference; opacity: 0;
+  }
+  #actUI .act-title { font-family: var(--serif); font-weight: 700; font-size: clamp(1.4rem, 2.8vw, 2.2rem); }
+  #actUI .act-sub { font-size: .7rem; letter-spacing: .3em; margin-top: .3em; opacity: .75; }
+
+  /* ═══ 舞台之上的演出内容 ═══ */
+  main { position: relative; z-index: 1; }
+  section { position: relative; padding: 0 6vw; }
+  .eyebrow { font-size: .72rem; letter-spacing: .35em; text-transform: uppercase; font-weight: 400; }
+  .misreg { position: relative; display: inline-block; font-family: var(--serif); font-weight: 700; line-height: .95; }
+  .misreg > .layer { display: block; }
+  .misreg > .ghost {
+    position: absolute; inset: 0; color: var(--accent);
+    transform: translate(4px, 3px); mix-blend-mode: screen; opacity: .55; pointer-events: none;
+  }
+
+  #sec-hero { height: 100vh; display: grid; }
+  .hero-inner { align-self: end; padding-bottom: 12vh; }
+  .hero-inner h1 { font-size: clamp(3rem, 12vw, 11rem); }
+
+  /* 影片之上的文字：直接排在画面上（pear.no 式，无卡片无底板）
+     只有一团边缘羽化的柔光保证可读性；落位在画面的视觉休息区 */
+  .stand { position: absolute; max-width: 23em; color: var(--paper); }
+  .stand::before {
+    content: ""; position: absolute; inset: -12% -18%; z-index: -1;
+    background: radial-gradient(ellipse at center, rgba(13,10,6,.5), transparent 68%);
+  }
+  .stand .num { font-family: var(--serif); font-style: italic; color: var(--accent); }
+  .stand .rule {
+    width: 2.6em; height: 1px; background: currentColor; opacity: .55;
+    margin: .75em 0 1em; transform: scaleX(0); transform-origin: left;
+  }
+  .stand h3 { font-family: var(--serif); font-size: 1.6rem; margin-bottom: .6em; text-shadow: 0 1px 20px rgba(13,10,6,.7); }
+  .stand h3 .ln { display: block; overflow: hidden; }
+  .stand h3 .ln i { display: block; font-style: normal; }
+  .stand p { font-size: .85rem; line-height: 1.9; color: rgba(244,239,230,.92); text-shadow: 0 1px 12px rgba(13,10,6,.65); }
+
+  .act { height: 300vh; }                      /* 段区间：滚动长度决定播放速度 */
+  .act-stage { position: sticky; top: 0; height: 100vh; }
+  .act .stand-a { left: 6vw; top: 16vh; }
+  .act .stand-b { right: 7vw; bottom: 24vh; }
+
+  /* 图版（plates）：静态陈列图 + 说明，带轻微视差 —— 资产台账里的 plate 类资产 */
+  .plates { padding: 10vh 6vw; display: grid; gap: 8vh; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .plates figure { position: relative; }
+  .plates img { width: 100%; height: auto; display: block; will-change: transform; }
+  .plates figcaption {
+    margin-top: 1.2em; font-size: .72rem; letter-spacing: .18em;
+    text-transform: uppercase; opacity: .8;
+  }
+
+  .interlude { height: 240vh; }                /* video 区间：活画间奏 */
+  .interlude-inner { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+  .interlude-inner p {
+    font-family: var(--serif); font-size: clamp(1.5rem, 4vw, 3.2rem); line-height: 1.5;
+    max-width: 24em; text-shadow: 0 2px 30px rgba(13,10,6,.8);
+  }
+  .interlude-inner .line { display: block; }
+  .interlude-inner .em { color: var(--accent); }
+
+  footer.site {
+    position: relative; z-index: 2; background: var(--paper); color: var(--ink);
+    padding: 7vh 6vw; display: flex; justify-content: space-between; align-items: baseline;
+    font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+    border-top: 1px solid var(--ink);
+  }
+
+  /* 降级：静态插画模式 */
+  body.static-mode { background: var(--paper); color: var(--ink); }
+  body.static-mode #stage, body.static-mode #actUI { display: none; }
+  body.static-mode .act, body.static-mode .interlude, body.static-mode #sec-hero { height: auto; padding: 12vh 7vw; }
+  body.static-mode .plates { grid-template-columns: 1fr; padding: 6vh 7vw; }
+  body.static-mode .stand { position: static; max-width: 34em; margin: 4vh 0; color: var(--ink); }
+  body.static-mode .stand::before { display: none; }
+  body.static-mode .stand h3, body.static-mode .stand p { text-shadow: none; color: var(--ink); }
+  body.static-mode .interlude-inner { position: static; height: auto; color: var(--ink); }
+  body.static-mode .interlude-inner p { text-shadow: none; }
+  .still { display: none; }
+  body.static-mode .still { display: block; width: 100%; margin: 4vh 0; border: 1px solid var(--ink); }
+
+  @media (max-width: 820px) {
+    .stand { max-width: 19em; }
+    .misreg > .ghost { transform: translate(2px, 2px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- 固定舞台：两个活画循环（hero / footer）+ 帧序列画布 -->
+<div id="stage" aria-hidden="true">
+  <video autoplay muted loop playsinline preload="auto" id="video-hero"
+         poster="assets/video/loop-hero-poster.jpg">
+    <source src="assets/video/loop-hero.mp4" type="video/mp4">
+  </video>
+  <video muted loop playsinline preload="auto" id="video-footer"
+         poster="assets/video/loop-footer-poster.jpg">
+    <source src="assets/video/loop-footer.mp4" type="video/mp4">
+  </video>
+  <canvas id="filmCanvas"></canvas>
+  <div class="halftone"></div>
+  <div id="dim"></div>
+</div>
+<div id="actUI" aria-hidden="true">
+  <div class="act-title" id="actTitle">第一幕</div>
+  <div class="act-sub" id="actSub">副标题</div>
+</div>
+
+<main>
+
+<!-- 封面：活画循环 -->
+<section id="sec-hero" data-dim="0.42">
+  <div class="hero-inner">
+    <p class="eyebrow">№ 01 — 眉题 / 定位语</p>
+    <h1 class="misreg">
+      <span class="layer">品牌主张<br>大字标题</span>
+      <span class="ghost" aria-hidden="true">品牌主张<br>大字标题</span>
+    </h1>
+  </div>
+</section>
+
+<!-- 第一幕：帧序列第 s1 段（每段帧数由 film.py 导出后才知道，脚本自动按实际文件数推导） -->
+<section class="act" data-dim="0.18" data-act='["第一幕","副标题文字"]' data-seg="s1" data-in="rise">
+  <div class="act-stage">
+    <div class="stand stand-a">
+      <span class="num">i.</span>
+      <span class="rule"></span>
+      <h3><span class="ln"><i>第一块内容</i></span></h3>
+      <p>随影片演出登场的文字，直接排在画面上。滚动时背景影片持续播放；离开本幕时让位消散。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 间奏：切回活画视频，宣言逐行显现（本段帧序列首帧 = 该循环首帧，同一文件，焊接无缝） -->
+<section class="interlude" data-dim="0.55" data-act='["间奏","宣言"]' data-video="hero">
+  <div class="interlude-inner">
+    <p class="eyebrow">№ 02 — 宣言</p>
+    <p>
+      <span class="line">宣言第一行，随滚动逐行显现。</span>
+      <span class="line">第二行，阐明你是谁、做什么。</span>
+      <span class="line"><span class="em">第三行，落到一个有力的结论。</span></span>
+    </p>
+  </div>
+</section>
+
+<!-- 第二幕：帧序列第 s2 段（帧号每段各自从 f_001 起） -->
+<section class="act" data-dim="0.22" data-act='["第二幕","副标题文字"]' data-seg="s2" data-in="slide">
+  <div class="act-stage">
+    <div class="stand stand-a">
+      <span class="num">ii.</span>
+      <span class="rule"></span>
+      <h3><span class="ln"><i>第二块内容</i></span></h3>
+      <p>说明文字。</p>
+    </div>
+    <div class="stand stand-b">
+      <span class="num">iii.</span>
+      <span class="rule"></span>
+      <h3><span class="ln"><i>第三块内容</i></span></h3>
+      <p>说明文字。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 尾声：定格在末帧之上 -->
+<section class="interlude" data-dim="0.6" data-act='["尾声","行动号召"]'>
+  <div class="interlude-inner" style="text-align:center; align-items:center;">
+    <h2 class="misreg" style="font-size:clamp(2.2rem,7vw,6rem);">
+      <span class="layer">结尾大标题</span>
+      <span class="ghost" aria-hidden="true">结尾大标题</span>
+    </h2>
+  </div>
+</section>
+
+<!-- 图版：静态陈列图（放在内容之上，带轻微视差） -->
+<section class="plates" data-dim="0.62" data-act='["图版","陈列"]'>
+  <figure>
+    <img src="assets/img/plates/p1.webp" alt="图版一的画面描述" loading="lazy">
+    <figcaption>图版 I — 说明文字</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/img/plates/p2.webp" alt="图版二的画面描述" loading="lazy">
+    <figcaption>图版 II — 说明文字</figcaption>
+  </figure>
+</section>
+
+<!-- 页脚活画：切回 footer 循环（data-video="footer"） -->
+<section class="interlude" data-dim="0.5" data-act='["落款","页脚"]' data-video="footer">
+  <div class="interlude-inner">
+    <p class="eyebrow">№ 03 — 落款</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <span>© 品牌名</span>
+  <span>❦</span>
+  <span>图片来源与署名信息</span>
+</footer>
+
+<!-- 降级用静态插画（按需替换） -->
+<img class="still" src="assets/img/still-1.jpg" alt="静态插画一">
+<img class="still" src="assets/img/still-2.jpg" alt="静态插画二">
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/ScrollTrigger.min.js"></script>
+<script>
+(function () {
+  gsap.registerPlugin(ScrollTrigger);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── 降级模式 ── */
+  if (reduced) {
+    document.body.classList.add("static-mode");
+    const stills = Array.from(document.querySelectorAll(".still"));
+    document.querySelectorAll("main section").forEach((s, i) => {
+      if (stills.length) s.appendChild(stills[i % stills.length].cloneNode());
+    });
+    return;
+  }
+
+  /* ── 帧序列 renderer（按段、按档取图）── */
+  const DIR = "assets/film/";                  // 每段各自从 f_001 起
+  const tier = () => (matchMedia("(max-width: 820px)").matches ? "w768" : "w1440");
+  const pad = n => String(n + 1).padStart(3, "0");
+  const canvas = document.getElementById("filmCanvas");
+  const ctx = canvas.getContext("2d");
+  const videos = { hero: document.getElementById("video-hero"),
+                   footer: document.getElementById("video-footer") };
+  const dim = document.getElementById("dim");
+  const actUI = document.getElementById("actUI");
+  const actTitle = document.getElementById("actTitle");
+  const actSub = document.getElementById("actSub");
+  const cache = {};                            // seg -> { n, imgs[] }
+  let cur = { seg: null, i: -1 };
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+
+  /* 段帧数不写死在 HTML 里（帧数由 film.py 导出后才确定）：探到 404 就停，
+     所以每次滚动进新段会按需探测一次。若你的静态服务器能目录列表，也可改成读清单。 */
+  function seg(segId) {
+    if (!cache[segId]) cache[segId] = { n: null, imgs: [], probing: false };
+    return cache[segId];
+  }
+  function srcOf(segId, i) { return DIR + segId + "/" + tier() + "/f_" + pad(i) + ".webp"; }
+
+  function draw(segId, i) {
+    const s = cache[segId];
+    const img = s && s.imgs[i];
+    if (!img || !img.complete || !img.naturalWidth) return;
+    if (canvas.width !== canvas.clientWidth * dpr) {
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = canvas.clientHeight * dpr;
+    }
+    const cw = canvas.width, ch = canvas.height;
+    const k = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
+    const w = img.naturalWidth * k, h = img.naturalHeight * k;
+    ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+  }
+
+  function load(segId, i) {
+    const s = seg(segId);
+    if (i < 0 || (s.n !== null && i >= s.n) || s.imgs[i]) return;
+    const im = new Image();
+    im.src = srcOf(segId, i);
+    im.onload = () => { if (cur.seg === segId && cur.i === i) draw(segId, i); };
+    im.onerror = () => { if (s.n === null || i < s.n) s.n = i; };   // 首个 404 = 段尾
+    s.imgs[i] = im;
+  }
+
+  /* 前向偏重预取（滚动多为向下）：向前 28 帧、向后 12 帧，避免一次预取 80+ 张 */
+  function preload(segId, center) {
+    for (let d = 0; d <= 28; d++) {
+      if (d <= 12) load(segId, center - d);
+      load(segId, center + d);
+    }
+  }
+
+  /* 跨过 820px 断点要换档，必须丢掉已缓存的另一档图（否则高低档混用） */
+  let curTier = tier();
+  function refreshTier() {
+    const t = tier();
+    if (t === curTier) return;
+    curTier = t;
+    for (const k of Object.keys(cache)) delete cache[k];
+    if (cur.seg) { cur = { seg: cur.seg, i: -1 }; }
+  }
+
+  /* ── 声明式时间轴 ── */
+  const QS = new URLSearchParams(location.search);
+  const smoothOff = QS.get("smooth") === "0";   // cdp_shots.py 默认带 smooth=0 关惯性
+  /* 调试钩子：cdp_shots.py --frames 会带 ?frame=N（段号 + 帧号）。QA 需要它把画面
+     钉在确定的一帧上，否则每次截图都随滚动位置漂移、拍回来一堆一样的图。 */
+  const pinnedFrames = (QS.get("frame") || "").split(",")
+    .map(s => s.trim()).filter(s => s !== "")
+    .map(s => { const [a, b] = s.split("."); return b === undefined ? Number(a) : Number(b); })
+    .filter(n => Number.isFinite(n));
+  const framePin = pinnedFrames.length ? pinnedFrames : null;
+
+  const secs = Array.from(document.querySelectorAll("main section"));
+  let timeline = [];
+  function measure() {
+    let lastFrameSeg = null;
+    timeline = secs.map(el => {
+      const segId = el.dataset.seg || null;
+      const video = el.dataset.video || null;
+      const hold = segId || video ? null : lastFrameSeg;   // 定格区沿用上一段末帧
+      if (segId) lastFrameSeg = segId;
+      return {
+        top: el.offsetTop, end: el.offsetTop + el.offsetHeight,
+        seg: segId, video, hold,
+        dim: parseFloat(el.dataset.dim || "0.3"),
+        act: el.dataset.act ? JSON.parse(el.dataset.act) : null
+      };
+    });
+  }
+
+  let curActKey = "";
+  let dimTarget = 0.35, dimNow = 0.35;
+  let canvasTarget = 0, canvasNow = 0;
+  let lastDim = null;
+
+  function tick() {
+    const y = scrollY + innerHeight * 0.5;     // 视口中心为演出基准线
+    let zone = null;
+    for (const z of timeline) {
+      if (y >= z.top && y < z.end) { zone = z; break; }
+    }
+    const past = y >= (timeline.length ? timeline[timeline.length - 1].end : 0);
+
+    /* 帧推进 / 定格（含冷启动吸附：直接跳入时补到上一区间末帧） */
+    if (framePin && zone && zone.seg) {
+      // 钉帧模式：由 ?frame=N 指定，直接画该帧，不随滚动漂移
+      const i = framePin[0];
+      if (cur.seg !== zone.seg || cur.i !== i) {
+        cur = { seg: zone.seg, i };
+        preload(zone.seg, i);
+        draw(zone.seg, i);
+      }
+    } else if (zone && zone.seg) {
+      const p = Math.min(1, Math.max(0, (y - zone.top) / (zone.end - zone.top)));
+      // 段帧数未知时先按进度取一个位置，404 会修正 s.n 并重取
+      const s = seg(zone.seg);
+      const n = s.n === null ? null : s.n;
+      const i = n ? Math.round(p * (n - 1)) : Math.round(p * 180);
+      if (cur.seg !== zone.seg || cur.i !== i) {
+        cur = { seg: zone.seg, i };
+        preload(zone.seg, i);
+        draw(zone.seg, i);
+      }
+    } else if (zone && zone.hold) {
+      const s = seg(zone.hold);
+      const i = s.n === null ? 0 : s.n - 1;
+      if (cur.seg !== zone.hold || cur.i !== i) {
+        cur = { seg: zone.hold, i };
+        preload(zone.hold, i);
+        draw(zone.hold, i);
+      }
+    }
+
+    /* 舞台层：活画 ↔ 帧序列 */
+    const wantVideo = zone ? !!zone.video
+      : (!past && timeline.length && y < timeline[0].top);
+    canvasTarget = wantVideo ? 0 : 1;
+    let activeKey = null;
+    if (wantVideo && videos[zone.video]) activeKey = zone.video;
+    else if (!wantVideo && cur.seg === null) {
+      // 进入帧序列区但还没铺满时，先让 hero 顶着，避免露底
+      activeKey = "hero";
+    }
+    for (const k of Object.keys(videos)) {
+      const v = videos[k];
+      if (!v) continue;
+      v.classList.toggle("active", k === activeKey);
+      if (k === activeKey && v.paused) v.play().catch(() => {});
+    }
+    if (!wantVideo && cur.seg !== null && cur.i < 0) {
+      cur = { seg: cur.seg, i: 0 };
+      preload(cur.seg, 0);
+      draw(cur.seg, 0);
+    }
+
+    /* 调光：页尾要沿用最后一幕自己声明的值，不能写死——
+       写死的值会把页脚活画整个压暗成灰底（实测就是这么来的） */
+    if (zone) lastDim = zone.dim;
+    dimTarget = zone ? zone.dim : (lastDim === null ? 0.42 : lastDim);
+
+    /* 幕次指示牌 */
+    const act = zone && zone.act ? zone.act : null;
+    const key = act ? act[0] : "";
+    if (key !== curActKey) {
+      curActKey = key;
+      if (act) {
+        actTitle.textContent = act[0];
+        actSub.textContent = act[1];
+        gsap.fromTo(actUI, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .6, overwrite: true });
+      } else {
+        gsap.to(actUI, { opacity: 0, duration: .4, overwrite: true });
+      }
+    }
+
+    /* 平滑过渡 */
+    canvasNow += (canvasTarget - canvasNow) * 0.12;
+    dimNow += (dimTarget - dimNow) * 0.1;
+    canvas.style.opacity = canvasNow.toFixed(3);
+    dim.style.opacity = dimNow.toFixed(3);
+
+    requestAnimationFrame(tick);
+  }
+
+  /* ── 演出元素：**scrub 时间轴**（不用 toggle 状态）──
+     每个文字块在所属幕的进度里「进场 → 停留 → 让位退场」，而不是钉死整幕。
+     进出场方式逐幕轮换（data-in="rise|slide|dissolve|wipe"），相邻幕不得相同。
+     用 scrub 而非 toggleActions 是为了让逐帧 QA 截图可复现。 */
+  const CQ = {
+    rise:     { from: { opacity: 0, y: 26 },  to: { opacity: 0, y: -22 } },
+    slide:    { from: { opacity: 0, x: -46 }, to: { opacity: 0, x: 38 } },
+    dissolve: { from: { opacity: 0 },          to: { opacity: 0 } },
+    wipe:     { from: { opacity: 0, filter: "blur(6px)" }, to: { opacity: 0, filter: "blur(5px)" } }
+  };
+  const lastEntry = { v: null };
+  function choreography(sec) {
+    let k = sec.dataset.in || null;
+    if (!k || !CQ[k]) {
+      const keys = Object.keys(CQ).filter(x => x !== lastEntry.v);
+      k = keys[Math.floor(Math.random() * keys.length)];
+    }
+    lastEntry.v = k;
+    return CQ[k];
+  }
+
+  document.querySelectorAll(".act-stage").forEach(stage => {
+    const sec = stage.closest("section");
+    const cq = choreography(sec);
+    const stands = Array.from(stage.querySelectorAll(".stand"));
+    stands.forEach((st, idx) => {
+      const inAt = 0.04 + idx * 0.22;          // 块与块在幕内错开
+      const outAt = Math.max(inAt + 0.30, 0.62 + idx * 0.12);
+      const sel = { num: st.querySelector(".num"), rule: st.querySelector(".rule"),
+                    h3: st.querySelector("h3"), ln: st.querySelector("h3 i"),
+                    p: st.querySelector("p") };
+      const tl = gsap.timeline({
+        defaults: { ease: "none" },
+        scrollTrigger: { trigger: sec, start: "top top", end: "bottom bottom", scrub: true }
+      });
+      // 进场：原地位移（落位邻近范围，不巡游）
+      tl.fromTo(st, Object.assign({}, cq.from), { opacity: 1, x: 0, y: 0, filter: "blur(0px)",
+              duration: 0.16, immediateRender: false }, inAt);
+      if (sel.num) tl.from(sel.num, { opacity: 0, y: 10, duration: 0.08 }, inAt);
+      if (sel.rule) tl.fromTo(sel.rule, { scaleX: 0 }, { scaleX: 1, duration: 0.12 }, inAt + 0.02);
+      if (sel.ln) tl.fromTo(sel.ln, { yPercent: 120 }, { yPercent: 0, duration: 0.14 }, inAt + 0.02);
+      if (sel.p) tl.from(sel.p, { opacity: 0, y: 16, duration: 0.14 }, inAt + 0.08);
+      // 让位：退场回到落位邻近范围并消散
+      tl.to(st, Object.assign({}, cq.to, { duration: 0.18 }), outAt);
+    });
+  });
+  gsap.fromTo(".interlude-inner .line",
+    { y: 44, opacity: 0 },
+    { y: 0, opacity: 1, stagger: 0.3, ease: "none",
+      scrollTrigger: { trigger: ".interlude", start: "top 80%", end: "top 20%", scrub: true } });
+
+  /* 图版视差：图像以略慢于滚动的速度移动（±10–20%），制造层次 */
+  document.querySelectorAll(".plates figure").forEach((fig, idx) => {
+    const img = fig.querySelector("img");
+    if (!img) return;
+    const shift = 14 + (idx % 3) * 3;
+    gsap.fromTo(img, { yPercent: -shift }, {
+      yPercent: shift, ease: "none",
+      scrollTrigger: { trigger: fig, start: "top bottom", end: "bottom top", scrub: true }
+    });
+  });
+
+  /* 字体加载完必须刷新 ScrollTrigger：webfont 换字会改变排版高度，
+     不刷新则所有 start/end 位置都是按 fallback 字体算的旧值 */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => ScrollTrigger.refresh());
+  }
+
+  addEventListener("resize", () => {
+    refreshTier();
+    measure();
+    if (cur.seg && cur.i >= 0) draw(cur.seg, cur.i);
+  });
+  measure();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
